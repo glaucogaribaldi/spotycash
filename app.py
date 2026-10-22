@@ -4,14 +4,14 @@ import json
 import time
 import asyncio
 import datetime
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List
 import requests
 from fastapi import FastAPI, HTTPException, Query
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
 from playwright.async_api import async_playwright
 
-app = FastAPI(title="Spotify At-Source Royalty Estimator (A&R / Label Edition)")
+app = FastAPI(title="SpotyCash — Spotify At-Source Royalty Estimator (A&R / Label Edition)")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -19,66 +19,150 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 95-Market Empirical At-Source Royalty Benchmark (USD per 1,000 streams - 2026 Dynamoi / Chartlex / Loud&Clear Ledger)
 COUNTRY_RPM_DB = {
-    "IS": {"name": "Islanda", "flag": "🇮🇸", "paid_rpm": 7.40, "free_rpm": 1.10, "paid_share": 0.960},
-    "CH": {"name": "Svizzera", "flag": "🇨🇭", "paid_rpm": 6.97, "free_rpm": 0.49, "paid_share": 0.953},
-    "FI": {"name": "Finlandia", "flag": "🇫🇮", "paid_rpm": 6.81, "free_rpm": 0.85, "paid_share": 0.950},
-    "DK": {"name": "Danimarca", "flag": "🇩🇰", "paid_rpm": 6.75, "free_rpm": 0.90, "paid_share": 0.950},
-    "GB": {"name": "Regno Unito", "flag": "🇬🇧", "paid_rpm": 6.07, "free_rpm": 1.86, "paid_share": 0.930},
-    "IE": {"name": "Irlanda", "flag": "🇮🇪", "paid_rpm": 5.84, "free_rpm": 1.40, "paid_share": 0.920},
-    "NO": {"name": "Norvegia", "flag": "🇳🇴", "paid_rpm": 5.83, "free_rpm": 0.75, "paid_share": 0.960},
-    "SE": {"name": "Svezia", "flag": "🇸🇪", "paid_rpm": 5.68, "free_rpm": 0.59, "paid_share": 0.973},
-    "LU": {"name": "Lussemburgo", "flag": "🇱🇺", "paid_rpm": 5.59, "free_rpm": 1.10, "paid_share": 0.930},
-    "NL": {"name": "Paesi Bassi", "flag": "🇳🇱", "paid_rpm": 5.16, "free_rpm": 1.07, "paid_share": 0.955},
-    "FR": {"name": "Francia", "flag": "🇫🇷", "paid_rpm": 4.88, "free_rpm": 0.86, "paid_share": 0.900},
+    "IS": {"name": "Iceland", "flag": "🇮🇸", "paid_rpm": 7.40, "free_rpm": 1.10, "paid_share": 0.960},
+    "CH": {"name": "Switzerland", "flag": "🇨🇭", "paid_rpm": 6.97, "free_rpm": 0.49, "paid_share": 0.953},
+    "FI": {"name": "Finland", "flag": "🇫🇮", "paid_rpm": 6.81, "free_rpm": 0.85, "paid_share": 0.950},
+    "DK": {"name": "Denmark", "flag": "🇩🇰", "paid_rpm": 6.75, "free_rpm": 0.90, "paid_share": 0.950},
+    "GB": {"name": "United Kingdom", "flag": "🇬🇧", "paid_rpm": 6.07, "free_rpm": 1.86, "paid_share": 0.930},
+    "IE": {"name": "Ireland", "flag": "🇮🇪", "paid_rpm": 5.84, "free_rpm": 1.40, "paid_share": 0.920},
+    "NO": {"name": "Norway", "flag": "🇳🇴", "paid_rpm": 5.83, "free_rpm": 0.75, "paid_share": 0.960},
+    "SE": {"name": "Sweden", "flag": "🇸🇪", "paid_rpm": 5.68, "free_rpm": 0.59, "paid_share": 0.973},
+    "LU": {"name": "Luxembourg", "flag": "🇱🇺", "paid_rpm": 5.59, "free_rpm": 1.10, "paid_share": 0.930},
+    "NL": {"name": "Netherlands", "flag": "🇳🇱", "paid_rpm": 5.16, "free_rpm": 1.07, "paid_share": 0.955},
+    "FR": {"name": "France", "flag": "🇫🇷", "paid_rpm": 4.88, "free_rpm": 0.86, "paid_share": 0.900},
     "AT": {"name": "Austria", "flag": "🇦🇹", "paid_rpm": 4.85, "free_rpm": 1.20, "paid_share": 0.930},
-    "IT": {"name": "Italia", "flag": "🇮🇹", "paid_rpm": 4.80, "free_rpm": 0.99, "paid_share": 0.809},
-    "BE": {"name": "Belgio", "flag": "🇧🇪", "paid_rpm": 4.77, "free_rpm": 0.95, "paid_share": 0.900},
-    "DE": {"name": "Germania", "flag": "🇩🇪", "paid_rpm": 4.67, "free_rpm": 1.66, "paid_share": 0.958},
-    "US": {"name": "Stati Uniti", "flag": "🇺🇸", "paid_rpm": 4.64, "free_rpm": 3.24, "paid_share": 0.895},
-    "IL": {"name": "Israele", "flag": "🇮🇱", "paid_rpm": 4.46, "free_rpm": 0.90, "paid_share": 0.880},
-    "ES": {"name": "Spagna", "flag": "🇪🇸", "paid_rpm": 4.17, "free_rpm": 0.49, "paid_share": 0.809},
+    "IT": {"name": "Italy", "flag": "🇮🇹", "paid_rpm": 4.80, "free_rpm": 0.99, "paid_share": 0.809},
+    "BE": {"name": "Belgium", "flag": "🇧🇪", "paid_rpm": 4.77, "free_rpm": 0.95, "paid_share": 0.900},
+    "DE": {"name": "Germany", "flag": "🇩🇪", "paid_rpm": 4.67, "free_rpm": 1.66, "paid_share": 0.958},
+    "US": {"name": "United States", "flag": "🇺🇸", "paid_rpm": 4.64, "free_rpm": 3.24, "paid_share": 0.895},
+    "IL": {"name": "Israel", "flag": "🇮🇱", "paid_rpm": 4.46, "free_rpm": 0.90, "paid_share": 0.880},
+    "ES": {"name": "Spain", "flag": "🇪🇸", "paid_rpm": 4.17, "free_rpm": 0.49, "paid_share": 0.809},
     "HK": {"name": "Hong Kong", "flag": "🇭🇰", "paid_rpm": 4.18, "free_rpm": 0.95, "paid_share": 0.860},
-    "NZ": {"name": "Nuova Zelanda", "flag": "🇳🇿", "paid_rpm": 4.12, "free_rpm": 1.90, "paid_share": 0.910},
-    "JP": {"name": "Giappone", "flag": "🇯🇵", "paid_rpm": 3.78, "free_rpm": 0.95, "paid_share": 0.820},
+    "NZ": {"name": "New Zealand", "flag": "🇳🇿", "paid_rpm": 4.12, "free_rpm": 1.90, "paid_share": 0.910},
+    "JP": {"name": "Japan", "flag": "🇯🇵", "paid_rpm": 3.78, "free_rpm": 0.95, "paid_share": 0.820},
     "AU": {"name": "Australia", "flag": "🇦🇺", "paid_rpm": 3.66, "free_rpm": 2.40, "paid_share": 0.924},
-    "AE": {"name": "Emirati Arabi", "flag": "🇦🇪", "paid_rpm": 3.64, "free_rpm": 0.95, "paid_share": 0.850},
-    "GR": {"name": "Grecia", "flag": "🇬🇷", "paid_rpm": 3.56, "free_rpm": 0.55, "paid_share": 0.800},
+    "AE": {"name": "United Arab Emirates", "flag": "🇦🇪", "paid_rpm": 3.64, "free_rpm": 0.95, "paid_share": 0.850},
+    "GR": {"name": "Greece", "flag": "🇬🇷", "paid_rpm": 3.56, "free_rpm": 0.55, "paid_share": 0.800},
     "SG": {"name": "Singapore", "flag": "🇸🇬", "paid_rpm": 3.54, "free_rpm": 0.95, "paid_share": 0.860},
-    "PT": {"name": "Portogallo", "flag": "🇵🇹", "paid_rpm": 3.52, "free_rpm": 0.45, "paid_share": 0.800},
-    "CZ": {"name": "Rep. Ceca", "flag": "🇨🇿", "paid_rpm": 3.29, "free_rpm": 0.52, "paid_share": 0.840},
+    "PT": {"name": "Portugal", "flag": "🇵🇹", "paid_rpm": 3.52, "free_rpm": 0.45, "paid_share": 0.800},
+    "CZ": {"name": "Czechia", "flag": "🇨🇿", "paid_rpm": 3.29, "free_rpm": 0.52, "paid_share": 0.840},
     "CA": {"name": "Canada", "flag": "🇨🇦", "paid_rpm": 3.18, "free_rpm": 1.50, "paid_share": 0.880},
-    "HR": {"name": "Croazia", "flag": "🇭🇷", "paid_rpm": 3.15, "free_rpm": 0.48, "paid_share": 0.800},
-    "KR": {"name": "Corea del Sud", "flag": "🇰🇷", "paid_rpm": 3.09, "free_rpm": 1.04, "paid_share": 0.880},
-    "PL": {"name": "Polonia", "flag": "🇵🇱", "paid_rpm": 2.33, "free_rpm": 0.38, "paid_share": 0.820},
+    "HR": {"name": "Croatia", "flag": "🇭🇷", "paid_rpm": 3.15, "free_rpm": 0.48, "paid_share": 0.800},
+    "KR": {"name": "South Korea", "flag": "🇰🇷", "paid_rpm": 3.09, "free_rpm": 1.04, "paid_share": 0.880},
+    "PL": {"name": "Poland", "flag": "🇵🇱", "paid_rpm": 2.33, "free_rpm": 0.38, "paid_share": 0.820},
     "RO": {"name": "Romania", "flag": "🇷🇴", "paid_rpm": 2.30, "free_rpm": 0.35, "paid_share": 0.780},
-    "BR": {"name": "Brasile", "flag": "🇧🇷", "paid_rpm": 2.20, "free_rpm": 0.26, "paid_share": 0.914},
-    "ZA": {"name": "Sudafrica", "flag": "🇿🇦", "paid_rpm": 2.19, "free_rpm": 0.30, "paid_share": 0.780},
-    "MX": {"name": "Messico", "flag": "🇲🇽", "paid_rpm": 1.75, "free_rpm": 0.21, "paid_share": 0.901},
-    "PE": {"name": "Perù", "flag": "🇵🇪", "paid_rpm": 1.72, "free_rpm": 0.20, "paid_share": 0.830},
-    "CL": {"name": "Cile", "flag": "🇨🇱", "paid_rpm": 1.67, "free_rpm": 0.22, "paid_share": 0.860},
+    "BR": {"name": "Brazil", "flag": "🇧🇷", "paid_rpm": 2.20, "free_rpm": 0.26, "paid_share": 0.914},
+    "ZA": {"name": "South Africa", "flag": "🇿🇦", "paid_rpm": 2.19, "free_rpm": 0.30, "paid_share": 0.780},
+    "MX": {"name": "Mexico", "flag": "🇲🇽", "paid_rpm": 1.75, "free_rpm": 0.21, "paid_share": 0.901},
+    "PE": {"name": "Peru", "flag": "🇵🇪", "paid_rpm": 1.72, "free_rpm": 0.20, "paid_share": 0.830},
+    "CL": {"name": "Chile", "flag": "🇨🇱", "paid_rpm": 1.67, "free_rpm": 0.22, "paid_share": 0.860},
     "AR": {"name": "Argentina", "flag": "🇦🇷", "paid_rpm": 1.21, "free_rpm": 0.15, "paid_share": 0.850},
     "CO": {"name": "Colombia", "flag": "🇨🇴", "paid_rpm": 0.90, "free_rpm": 0.12, "paid_share": 0.800},
-    "TR": {"name": "Turchia", "flag": "🇹🇷", "paid_rpm": 0.89, "free_rpm": 0.11, "paid_share": 0.780},
+    "TR": {"name": "Turkey", "flag": "🇹🇷", "paid_rpm": 0.89, "free_rpm": 0.11, "paid_share": 0.780},
     "IN": {"name": "India", "flag": "🇮🇳", "paid_rpm": 0.78, "free_rpm": 0.55, "paid_share": 0.766},
     "ID": {"name": "Indonesia", "flag": "🇮🇩", "paid_rpm": 0.55, "free_rpm": 0.08, "paid_share": 0.700},
     "NG": {"name": "Nigeria", "flag": "🇳🇬", "paid_rpm": 0.39, "free_rpm": 0.02, "paid_share": 0.600},
-    "GLOBAL": {"name": "Resto del Mondo (Media)", "flag": "🌍", "paid_rpm": 3.85, "free_rpm": 0.85, "paid_share": 0.820},
+    "GLOBAL": {"name": "Rest of World (Average)", "flag": "🌍", "paid_rpm": 3.85, "free_rpm": 0.85, "paid_share": 0.820},
 }
 
-# Cache for Pathfinder credentials and analyzed results
 PF_SESSION = {
     "url": "https://api-partner.spotify.com/pathfinder/v2/query",
     "headers": {},
     "expires_at": 0
 }
+SPOTIFY_API_TOKEN = {"token": None, "expires_at": 0}
 RESULT_CACHE: Dict[str, Any] = {}
 BROWSER_LOCK = asyncio.Lock()
 
 HASH_ARTIST_OVERVIEW = "9f8134ef565e78621f1e1793555bd6633c5ac144ae0f89604ed3ae3f80b3c8e6"
 HASH_GET_ALBUM = "0b6ce3511e1b02e4a40fa95440f992acbe85080eb308af9194322d708fc1914f"
 HASH_GET_TRACK = "fe16b8083eec2305854db612ca75589bcb71e009dc7a4d014f29bd534a4c01f5"
+
+def get_spotify_api_token() -> str:
+    now = time.time()
+    if SPOTIFY_API_TOKEN["token"] and now < SPOTIFY_API_TOKEN["expires_at"]:
+        return SPOTIFY_API_TOKEN["token"]
+    cid = os.environ.get("SPOTIFY_CLIENT_ID", "")
+    csec = os.environ.get("SPOTIFY_CLIENT_SECRET", "")
+    if not cid or not csec:
+        return ""
+    import base64 as b64lib
+    b64 = b64lib.b64encode(f"{cid}:{csec}".encode()).decode()
+    try:
+        r = requests.post(
+            "https://accounts.spotify.com/api/token",
+            headers={"Authorization": f"Basic {b64}"},
+            data={"grant_type": "client_credentials"},
+            timeout=8,
+        )
+        if r.status_code == 200:
+            tok = r.json().get("access_token", "")
+            SPOTIFY_API_TOKEN["token"] = tok
+            SPOTIFY_API_TOKEN["expires_at"] = now + 3300
+            return tok
+    except Exception:
+        pass
+    return ""
+
+def enrich_dates_labels_from_web_api(tracks_list: List[dict]):
+    tok = get_spotify_api_token()
+    if not tok or not tracks_list:
+        return
+    # Batch tracks in chunks of 50 to get exact album release_date and album IDs
+    headers = {"Authorization": f"Bearer {tok}"}
+    for i in range(0, len(tracks_list), 50):
+        batch = tracks_list[i:i+50]
+        ids = [t["id"] for t in batch if t.get("id") and len(t["id"]) == 22]
+        if not ids:
+            continue
+        try:
+            r = requests.get(f"https://api.spotify.com/v1/tracks?ids={','.join(ids)}", headers=headers, timeout=10)
+            if r.status_code == 200:
+                items = r.json().get("tracks", [])
+                id_map = {it["id"]: it for it in items if it and it.get("id")}
+                for t in batch:
+                    it = id_map.get(t["id"])
+                    if it:
+                        alb = it.get("album", {})
+                        rdate = alb.get("release_date")
+                        if rdate:
+                            if len(rdate) == 4:
+                                rdate = f"{rdate}-01-01"
+                            elif len(rdate) == 7:
+                                rdate = f"{rdate}-01"
+                            t["release_date"] = rdate[:10]
+                            # Recompute streams_12m and streams_30d with exact release date
+                            recompute_track_windows(t)
+        except Exception:
+            pass
+
+def recompute_track_windows(t: dict):
+    playcount = int(t.get("playcount_all_time") or 0)
+    today = datetime.date(2026, 10, 22)
+    try:
+        rel_dt = datetime.date.fromisoformat(t["release_date"][:10])
+    except Exception:
+        rel_dt = datetime.date(2025, 10, 22)
+    days_active = max(1, (today - rel_dt).days)
+    avg_daily = playcount / days_active
+    if days_active <= 365:
+        streams_12m = playcount
+    else:
+        age_years = days_active / 365.0
+        retention_factor = min(0.85, max(0.14, 1.0 / (age_years ** 0.72)))
+        streams_12m = int(round(playcount * retention_factor))
+    if days_active <= 30:
+        streams_30d = playcount
+    elif days_active <= 90:
+        streams_30d = int(round(avg_daily * 30 * 0.82))
+    else:
+        streams_30d = int(round((streams_12m / 12.0) * 0.95))
+    t["days_active"] = days_active
+    t["avg_daily_streams"] = round(avg_daily, 1)
+    t["streams_12m"] = streams_12m
+    t["streams_30d"] = streams_30d
+    t["eligible_1000_threshold"] = (streams_12m >= 1000 or playcount >= 1000)
 
 def parse_spotify_input(raw: str):
     raw = raw.strip()
@@ -90,9 +174,9 @@ def parse_spotify_input(raw: str):
         return m_url.group(1), m_url.group(2)
     if re.match(r"^[A-Za-z0-9]{22}$", raw):
         return "artist", raw
-    raise ValueError("Inserisci un link o URI Spotify valido (Artista, Album o Brano).")
+    raise ValueError("Please enter a valid Spotify link or URI (Artist, Album, or Track).")
 
-async def ensure_pathfinder_headers(seed_type="artist", seed_id="3aOWq3jfuEv9aBQXqW8iTe"):
+async def ensure_pathfinder_headers(seed_type="artist", seed_id="3TVXtAsR1Inumwj472S9r4"):
     now = time.time()
     if PF_SESSION["headers"].get("authorization") and now < PF_SESSION["expires_at"]:
         return PF_SESSION["url"], PF_SESSION["headers"], None
@@ -158,11 +242,11 @@ def pf_query(op_name: str, sha256_hash: str, variables: dict) -> dict:
 def compute_territory_weights(top_cities: List[dict]) -> List[dict]:
     if not top_cities:
         return [
-            {"code": "IT", **COUNTRY_RPM_DB["IT"], "weight_pct": 80.0},
-            {"code": "CH", **COUNTRY_RPM_DB["CH"], "weight_pct": 6.0},
-            {"code": "DE", **COUNTRY_RPM_DB["DE"], "weight_pct": 5.0},
-            {"code": "US", **COUNTRY_RPM_DB["US"], "weight_pct": 5.0},
-            {"code": "ES", **COUNTRY_RPM_DB["ES"], "weight_pct": 4.0},
+            {"code": "US", **COUNTRY_RPM_DB["US"], "weight_pct": 60.0},
+            {"code": "GB", **COUNTRY_RPM_DB["GB"], "weight_pct": 15.0},
+            {"code": "DE", **COUNTRY_RPM_DB["DE"], "weight_pct": 10.0},
+            {"code": "IT", **COUNTRY_RPM_DB["IT"], "weight_pct": 10.0},
+            {"code": "GLOBAL", **COUNTRY_RPM_DB["GLOBAL"], "weight_pct": 5.0},
         ]
     country_listeners: Dict[str, int] = {}
     total_top_city_listeners = 0
@@ -175,12 +259,11 @@ def compute_territory_weights(top_cities: List[dict]) -> List[dict]:
     if total_top_city_listeners <= 0:
         total_top_city_listeners = 1
 
-    # Allocate 92% across countries represented in Top Cities, and 8% across natural diaspora / neighbors
     territories = []
     allocated = 0.0
     for cc, cnt in sorted(country_listeners.items(), key=lambda x: x[1], reverse=True):
         info = COUNTRY_RPM_DB.get(cc, {
-            "name": f"Mercato {cc}",
+            "name": f"Market {cc}",
             "flag": "🌐",
             "paid_rpm": 3.85,
             "free_rpm": 0.85,
@@ -201,7 +284,6 @@ def compute_territory_weights(top_cities: List[dict]) -> List[dict]:
 
     rem = round(100.0 - allocated, 1)
     if rem > 0:
-        # If primary is IT, add CH/DE/US diaspora; otherwise GLOBAL
         primary = territories[0]["code"] if territories else "GLOBAL"
         if primary == "IT" and len(territories) == 1:
             territories[0]["weight_pct"] = 92.0
@@ -221,52 +303,24 @@ def compute_territory_weights(top_cities: List[dict]) -> List[dict]:
     return territories
 
 def enrich_track_metrics(tr: dict, release_name: str, release_date_str: str, label: str, cover_url: str) -> dict:
-    playcount = int(tr.get("playcount") or 0)
-    today = datetime.date(2026, 10, 22)
-    try:
-        rel_dt = datetime.date.fromisoformat(release_date_str[:10])
-    except Exception:
-        rel_dt = datetime.date(2025, 10, 22)
-
-    days_active = max(1, (today - rel_dt).days)
-    avg_daily = playcount / days_active
-
-    # Estimate Last 12 Months (365 days) streams
-    if days_active <= 365:
-        streams_12m = playcount
-    else:
-        # Power-law catalog decay curve: recent 365 days weight vs older back-catalog
-        age_years = days_active / 365.0
-        retention_factor = min(0.85, max(0.18, 1.0 / (age_years ** 0.72)))
-        streams_12m = int(round(playcount * retention_factor))
-
-    # Estimate Current 30 Days streams
-    if days_active <= 30:
-        streams_30d = playcount
-    elif days_active <= 90:
-        # Recent release momentum
-        streams_30d = int(round(avg_daily * 30 * 0.82))
-    else:
-        streams_30d = int(round((streams_12m / 12.0) * 0.95))
-
-    eligible_1000 = streams_12m >= 1000 or playcount >= 1000
-
-    return {
+    item = {
         "id": tr.get("id") or (tr.get("uri", "").split(":")[-1]),
         "uri": tr.get("uri", ""),
         "name": tr.get("name", "Unknown Track"),
         "release_name": release_name,
-        "release_date": release_date_str[:10] if release_date_str else "2026-01-01",
-        "days_active": days_active,
-        "label": label or "Independent",
+        "release_date": release_date_str[:10] if release_date_str else "2025-01-01",
+        "days_active": 365,
+        "label": label or "Official Catalog",
         "cover_url": cover_url,
         "duration_ms": tr.get("duration", {}).get("totalMilliseconds", 180000),
-        "playcount_all_time": playcount,
-        "streams_12m": streams_12m,
-        "streams_30d": streams_30d,
-        "avg_daily_streams": round(avg_daily, 1),
-        "eligible_1000_threshold": eligible_1000,
+        "playcount_all_time": int(tr.get("playcount") or 0),
+        "streams_12m": 0,
+        "streams_30d": 0,
+        "avg_daily_streams": 0.0,
+        "eligible_1000_threshold": True,
     }
+    recompute_track_windows(item)
+    return item
 
 @app.get("/api/analyze")
 async def analyze_spotify(url: str = Query(..., description="Spotify URL or URI")):
@@ -275,17 +329,17 @@ async def analyze_spotify(url: str = Query(..., description="Spotify URL or URI"
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-    cache_key = f"{entity_type}:{entity_id}"
+    cache_key = f"{entity_type}:{entity_id}:en_v2"
     if cache_key in RESULT_CACHE and (time.time() - RESULT_CACHE[cache_key]["ts"] < 900):
         return RESULT_CACHE[cache_key]["payload"]
 
     _, headers, seed_data = await ensure_pathfinder_headers(entity_type, entity_id)
     if not headers.get("authorization"):
-        raise HTTPException(status_code=502, detail="Impossibile ottenere token di sessione Spotify Pathfinder.")
+        raise HTTPException(status_code=502, detail="Unable to obtain Spotify Pathfinder session token.")
 
     tracks_map: Dict[str, dict] = {}
     artist_uri = None
-    artist_name = "Artista Spotify"
+    artist_name = "Spotify Artist"
     artist_avatar = ""
     monthly_listeners = 0
     followers = 0
@@ -301,7 +355,7 @@ async def analyze_spotify(url: str = Query(..., description="Spotify URL or URI"
         au = ao.get("data", {}).get("artistUnion", {})
         artist_name = au.get("profile", {}).get("name", "Unknown Artist")
         target_title = artist_name
-        target_subtitle = "Catalogo Completo Artista"
+        target_subtitle = "Full Artist Catalog Analysis"
         avatar_sources = au.get("visuals", {}).get("avatarImage", {}).get("sources", [])
         if avatar_sources:
             artist_avatar = avatar_sources[0].get("url", "")
@@ -312,20 +366,24 @@ async def analyze_spotify(url: str = Query(..., description="Spotify URL or URI"
 
         disc = au.get("discography", {})
         album_ids = []
-        for group_key in ["albums", "singles", "compilations", "popularReleasesAlbums"]:
-            for grp in disc.get(group_key, {}).get("items", []):
+        # Priority: popularReleasesAlbums + albums + singles + compilations
+        for group_key in ["popularReleasesAlbums", "albums", "singles", "compilations"]:
+            grp_obj = disc.get(group_key, {})
+            for grp in grp_obj.get("items", []):
+                # popularReleasesAlbums items might be direct album objects or have releases.items
+                if grp.get("id") and grp.get("id") not in album_ids:
+                    album_ids.append(grp.get("id"))
                 for rel in grp.get("releases", {}).get("items", []):
                     aid = rel.get("id")
                     if aid and aid not in album_ids:
                         album_ids.append(aid)
 
-        # Fetch each release up to 25 releases for speed & completeness
-        for aid in album_ids[:25]:
+        for aid in album_ids[:28]:
             try:
                 alb_res = pf_query("getAlbum", HASH_GET_ALBUM, {"uri": f"spotify:album:{aid}", "locale": "", "offset": 0, "limit": 50})
                 albu = alb_res.get("data", {}).get("albumUnion", {})
                 rel_name = albu.get("name", "")
-                rel_date = albu.get("date", {}).get("isoString", "2026-01-01")
+                rel_date = albu.get("date", {}).get("isoString", "2025-01-01")
                 rel_label = albu.get("label", "")
                 cov_s = albu.get("coverArt", {}).get("sources", [])
                 cov_url = cov_s[0].get("url", "") if cov_s else artist_avatar
@@ -334,17 +392,14 @@ async def analyze_spotify(url: str = Query(..., description="Spotify URL or URI"
                     t_uri = tr.get("uri", "")
                     if not t_uri:
                         continue
-                    # Check if artist is on this track
                     t_artists = [a.get("uri") for a in tr.get("artists", {}).get("items", [])]
                     if artist_uri in t_artists or not t_artists:
                         enriched = enrich_track_metrics(tr, rel_name, rel_date, rel_label, cov_url)
-                        # Deduplicate by track URI or keep highest playcount if same title
                         if t_uri not in tracks_map or enriched["playcount_all_time"] > tracks_map[t_uri]["playcount_all_time"]:
                             tracks_map[t_uri] = enriched
             except Exception:
                 pass
 
-        # Also ensure topTracks are included
         for item in disc.get("topTracks", {}).get("items", []):
             tr = item.get("track", {})
             t_uri = tr.get("uri", "")
@@ -355,8 +410,8 @@ async def analyze_spotify(url: str = Query(..., description="Spotify URL or URI"
                 tracks_map[t_uri] = enrich_track_metrics(
                     tr,
                     alb_of_t.get("name", "Single"),
-                    "2026-01-01",
-                    "Official Release",
+                    "2025-01-01",
+                    "Major / Official Release",
                     cov_url,
                 )
 
@@ -366,17 +421,16 @@ async def analyze_spotify(url: str = Query(..., description="Spotify URL or URI"
             alb_res = pf_query("getAlbum", HASH_GET_ALBUM, {"uri": f"spotify:album:{entity_id}", "locale": "", "offset": 0, "limit": 50})
         albu = alb_res.get("data", {}).get("albumUnion", {})
         rel_name = albu.get("name", "Album")
-        rel_date = albu.get("date", {}).get("isoString", "2026-01-01")
+        rel_date = albu.get("date", {}).get("isoString", "2025-01-01")
         rel_label = albu.get("label", "Independent")
         cov_s = albu.get("coverArt", {}).get("sources", [])
         cov_url = cov_s[0].get("url", "") if cov_s else ""
-        artist_Avatar = cov_url
         artists_list = albu.get("artists", {}).get("items", [])
         if artists_list:
             artist_uri = artists_list[0].get("uri")
             artist_name = artists_list[0].get("profile", {}).get("name", "Artist")
         target_title = rel_name
-        target_subtitle = f"Album / EP di {artist_name}"
+        target_subtitle = f"Album / EP by {artist_name}"
         artist_avatar = cov_url
 
         for item in albu.get("tracksV2", {}).get("items", []):
@@ -403,7 +457,7 @@ async def analyze_spotify(url: str = Query(..., description="Spotify URL or URI"
         tu = tr_res.get("data", {}).get("trackUnion", {})
         alb_of_t = tu.get("albumOfTrack", {})
         rel_name = alb_of_t.get("name", "Single")
-        rel_date = alb_of_t.get("date", {}).get("isoString", "2026-01-01")
+        rel_date = alb_of_t.get("date", {}).get("isoString", "2025-01-01")
         cov_s = alb_of_t.get("coverArt", {}).get("sources", [])
         cov_url = cov_s[0].get("url", "") if cov_s else ""
         artist_avatar = cov_url
@@ -412,7 +466,7 @@ async def analyze_spotify(url: str = Query(..., description="Spotify URL or URI"
             artist_uri = first_art[0].get("uri")
             artist_name = first_art[0].get("profile", {}).get("name", "Artist")
         target_title = tu.get("name", "Track")
-        target_subtitle = f"Singolo / Brano di {artist_name}"
+        target_subtitle = f"Single / Track by {artist_name}"
         t_uri = tu.get("uri", f"spotify:track:{entity_id}")
         tracks_map[t_uri] = enrich_track_metrics(tu, rel_name, rel_date, "Official Release", cov_url)
 
@@ -428,6 +482,9 @@ async def analyze_spotify(url: str = Query(..., description="Spotify URL or URI"
                 pass
 
     tracks_list = sorted(tracks_map.values(), key=lambda x: x["playcount_all_time"], reverse=True)
+    # Enrich release dates from official Spotify Web API for any track that lacked album date
+    enrich_dates_labels_from_web_api(tracks_list[:50])
+
     territories = compute_territory_weights(top_cities)
 
     payload = {
@@ -452,10 +509,15 @@ async def analyze_spotify(url: str = Query(..., description="Spotify URL or URI"
     RESULT_CACHE[cache_key] = {"ts": time.time(), "payload": payload}
     return payload
 
+@app.get("/api/health")
+async def health():
+    return {"status": "ok", "service": "spotycash", "node": "geneticai-nemotron-spark"}
+
 @app.get("/", response_class=HTMLResponse)
 async def root_page():
     with open("/home/zava/spotify-royalty-estimator/index.html", "r", encoding="utf-8") as f:
         return f.read()
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8095)
