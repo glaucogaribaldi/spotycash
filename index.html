@@ -1,0 +1,586 @@
+<!DOCTYPE html>
+<html lang="it" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SpotyCash — Preventivo Royalties Spotify At-Source (A&R & Discografia)</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Inter', sans-serif; background-color: #090d16; color: #f1f5f9; }
+    .card-glass { background: rgba(17, 24, 39, 0.88); border: 1px solid rgba(255, 255, 255, 0.08); backdrop-filter: blur(12px); }
+    input[type=range] { accent-color: #1DB954; }
+  </style>
+</head>
+<body class="min-h-screen pb-16">
+  <!-- Header -->
+  <header class="border-b border-slate-800 bg-slate-950/90 sticky top-0 z-30 backdrop-blur-md">
+    <div class="max-w-7xl mx-auto px-4 py-4 flex flex-col md:flex-row items-center justify-between gap-4">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 font-extrabold text-xl">$</div>
+        <div>
+          <h1 class="text-lg font-extrabold tracking-tight text-white flex items-center gap-2">
+            SpotyCash <span class="text-xs px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 font-semibold">AT-SOURCE MASTER (USD $)</span>
+          </h1>
+          <p class="text-xs text-slate-400">Preventivo Discografico Royalties Spotify • 95 Territori Reali (Paid vs Free) • Live Pathfinder Engine</p>
+        </div>
+      </div>
+      <div class="flex w-full md:w-auto items-center gap-2">
+        <input id="spotifyUrlInput" type="text" value="https://open.spotify.com/intl-it/artist/3aOWq3jfuEv9aBQXqW8iTe?si=nkFdcoo3QgC5cnmwEFD_3A"
+          placeholder="Incolla link Spotify Artista, Album o Canzone..."
+          class="w-full md:w-96 px-4 py-2.5 rounded-xl bg-slate-900 border border-slate-700 text-sm text-white focus:outline-none focus:border-emerald-500" />
+        <button id="analyzeBtn" onclick="runAnalysis()"
+          class="px-5 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-sm transition whitespace-nowrap shadow-lg shadow-emerald-500/20">
+          Calcola Royalties
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-7xl mx-auto px-4 mt-6 space-y-6">
+    <!-- Loading Banner -->
+    <div id="loadingBox" class="hidden card-glass rounded-2xl p-6 text-center border border-emerald-500/30">
+      <div class="inline-block animate-spin rounded-full h-8 w-8 border-4 border-emerald-400 border-t-transparent mb-3"></div>
+      <p class="text-base font-semibold text-white">Scansione Live Spotify Pathfinder & Calcolo Matrice 95 Territori in corso...</p>
+      <p class="text-xs text-slate-400 mt-1">Estrazione playcount reali brano per brano, Top Cities dell'artista e RPM Free/Premium sulla VPS Kronos (può richiedere 5-12 secondi per cataloghi completi).</p>
+    </div>
+
+    <!-- Error Box -->
+    <div id="errorBox" class="hidden rounded-2xl p-4 bg-red-950/60 border border-red-500/40 text-red-200 text-sm"></div>
+
+    <!-- Artist / Entity Hero -->
+    <section id="heroSection" class="card-glass rounded-2xl p-6 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
+      <div class="flex items-center gap-5">
+        <img id="artistAvatar" src="https://i.scdn.co/image/ab6761610000e5ebe1ce3e0de3c00aa9bf95f23d" alt="Cover" class="w-20 h-20 rounded-2xl object-cover border border-slate-700 bg-slate-800" />
+        <div>
+          <div class="flex items-center gap-2">
+            <span id="entityBadge" class="text-[11px] uppercase tracking-wider font-bold px-2.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">ARTISTA</span>
+            <span id="subtitleText" class="text-xs text-slate-400">Catalogo Completo Artista</span>
+          </div>
+          <h2 id="targetTitle" class="text-3xl font-extrabold text-white mt-1">—</h2>
+          <div class="flex flex-wrap items-center gap-4 mt-2 text-xs text-slate-300">
+            <span>🎧 Ascoltatori Mensili: <strong id="monthlyListeners" class="text-white">—</strong></span>
+            <span>👥 Followers: <strong id="followersCount" class="text-white">—</strong></span>
+            <span>💿 Brani Analizzati: <strong id="tracksCount" class="text-emerald-400">—</strong></span>
+            <span>📊 Stream Totali (Dal Giorno 1): <strong id="totalStreamsAllTime" class="text-emerald-400">—</strong></span>
+          </div>
+        </div>
+      </div>
+      <!-- Blended RPM Summary Pill -->
+      <div class="bg-slate-900/90 border border-slate-800 rounded-xl p-4 w-full lg:w-auto min-w-[310px]">
+        <div class="text-xs text-slate-400 flex justify-between">
+          <span>RPM Master "At-Source" Ponderato:</span>
+          <span id="activeSplitLabel" class="text-emerald-400 font-semibold">81.5% Paid / 18.5% Free</span>
+        </div>
+        <div class="mt-2 grid grid-cols-3 gap-2 text-center">
+          <div class="bg-slate-950 p-2 rounded-lg border border-slate-800/80">
+            <div class="text-[10px] text-slate-400 uppercase">Min (Freemium)</div>
+            <div id="rpmLow" class="text-sm font-bold text-amber-400">$3.29</div>
+            <div class="text-[10px] text-slate-500">per 1k stream</div>
+          </div>
+          <div class="bg-emerald-950/30 p-2 rounded-lg border border-emerald-500/40">
+            <div class="text-[10px] text-emerald-300 uppercase font-semibold">Reale Atteso</div>
+            <div id="rpmMid" class="text-base font-extrabold text-emerald-400">$4.11</div>
+            <div class="text-[10px] text-emerald-500/80">per 1k stream</div>
+          </div>
+          <div class="bg-slate-950 p-2 rounded-lg border border-slate-800/80">
+            <div class="text-[10px] text-slate-400 uppercase">Max (Premium)</div>
+            <div id="rpmHigh" class="text-sm font-bold text-sky-400">$4.44</div>
+            <div class="text-[10px] text-slate-500">per 1k stream</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 3 Time Horizons Cards (Dal Giorno 1 | Ultimo Anno | Questo Mese) -->
+    <section class="grid grid-cols-1 md:grid-cols-3 gap-5">
+      <!-- All-Time -->
+      <div class="card-glass rounded-2xl p-5 border-t-4 border-t-emerald-500">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-bold uppercase tracking-wider text-emerald-400">1. Fin dal Giorno 1 (All-Time)</span>
+          <span id="streamsAllTimeBadge" class="text-xs bg-slate-800 text-slate-200 px-2.5 py-0.5 rounded-full font-semibold">0 stream</span>
+        </div>
+        <div class="mt-4">
+          <div class="text-xs text-slate-400">Stima Centrale Reale "At-Source" (USD)</div>
+          <div id="revAllTimeMid" class="text-3xl font-extrabold text-white mt-0.5">$0</div>
+        </div>
+        <div class="mt-4 pt-3 border-t border-slate-800/80 flex items-center justify-between text-xs">
+          <div>
+            <span class="text-slate-400 block">Forchetta Bassa (Freemium)</span>
+            <strong id="revAllTimeLow" class="text-amber-400 text-sm">$0</strong>
+          </div>
+          <div class="text-right">
+            <span class="text-slate-400 block">Forchetta Alta (Premium)</span>
+            <strong id="revAllTimeHigh" class="text-sky-400 text-sm">$0</strong>
+          </div>
+        </div>
+        <div class="mt-2 text-[11px] text-slate-500 flex justify-between">
+          <span>100% Free: <b id="revAllTime100Free" class="text-slate-400">$0</b></span>
+          <span>100% Premium: <b id="revAllTime100Paid" class="text-slate-400">$0</b></span>
+        </div>
+      </div>
+
+      <!-- Last 12 Months -->
+      <div class="card-glass rounded-2xl p-5 border-t-4 border-t-sky-500">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-bold uppercase tracking-wider text-sky-400">2. Ultimo Anno (Ultimi 12 Mesi)</span>
+          <span id="streams12mBadge" class="text-xs bg-slate-800 text-slate-200 px-2.5 py-0.5 rounded-full font-semibold">0 stream</span>
+        </div>
+        <div class="mt-4">
+          <div class="text-xs text-slate-400">Royalties Annuali "At-Source" (USD)</div>
+          <div id="rev12mMid" class="text-3xl font-extrabold text-white mt-0.5">$0</div>
+        </div>
+        <div class="mt-4 pt-3 border-t border-slate-800/80 flex items-center justify-between text-xs">
+          <div>
+            <span class="text-slate-400 block">Forchetta Bassa (Freemium)</span>
+            <strong id="rev12mLow" class="text-amber-400 text-sm">$0</strong>
+          </div>
+          <div class="text-right">
+            <span class="text-slate-400 block">Forchetta Alta (Premium)</span>
+            <strong id="rev12mHigh" class="text-sky-400 text-sm">$0</strong>
+          </div>
+        </div>
+        <div class="mt-2 text-[11px] text-slate-500 flex justify-between">
+          <span>Soglia &gt;1.000 stream/anno applicata</span>
+          <span>Media Mensile: <b id="rev12mMonthlyAvg" class="text-slate-300">$0/mese</b></span>
+        </div>
+      </div>
+
+      <!-- Current Month (30 Days) -->
+      <div class="card-glass rounded-2xl p-5 border-t-4 border-t-amber-500">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-bold uppercase tracking-wider text-amber-400">3. Questo Mese (Ultimi 30 GG)</span>
+          <span id="streams30dBadge" class="text-xs bg-slate-800 text-slate-200 px-2.5 py-0.5 rounded-full font-semibold">0 stream</span>
+        </div>
+        <div class="mt-4">
+          <div class="text-xs text-slate-400">Run-Rate Mensile Attuale "At-Source" (USD)</div>
+          <div id="rev30dMid" class="text-3xl font-extrabold text-white mt-0.5">$0</div>
+        </div>
+        <div class="mt-4 pt-3 border-t border-slate-800/80 flex items-center justify-between text-xs">
+          <div>
+            <span class="text-slate-400 block">Forchetta Bassa (Freemium)</span>
+            <strong id="rev30dLow" class="text-amber-400 text-sm">$0</strong>
+          </div>
+          <div class="text-right">
+            <span class="text-slate-400 block">Forchetta Alta (Premium)</span>
+            <strong id="rev30dHigh" class="text-sky-400 text-sm">$0</strong>
+          </div>
+        </div>
+        <div class="mt-2 text-[11px] text-slate-500 flex justify-between">
+          <span>Proiezione Annualizzata Run-Rate:</span>
+          <b id="rev30dAnnualized" class="text-emerald-400">$0 / anno</b>
+        </div>
+      </div>
+    </section>
+
+    <!-- Territory & Free/Premium Interactive Controls -->
+    <section class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+      <!-- Top Cities & Territory Sliders -->
+      <div class="lg:col-span-7 card-glass rounded-2xl p-5 space-y-4">
+        <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+          <div>
+            <h3 class="text-base font-bold text-white">🌍 Allocazione Geografica & Territori d'Ascolto</h3>
+            <p class="text-xs text-slate-400">Rilevata in automatico dalle Top Cities del profilo pubblico Spotify (modificabile con gli slider)</p>
+          </div>
+          <button onclick="resetTerritories()" class="text-xs px-3 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300">Ripristina Auto</button>
+        </div>
+
+        <!-- Top 5 Cities Chips -->
+        <div>
+          <div class="text-[11px] uppercase tracking-wider text-slate-400 font-semibold mb-2">Top 5 Città Rilevate su Spotify:</div>
+          <div id="topCitiesContainer" class="flex flex-wrap gap-2"></div>
+        </div>
+
+        <!-- Territory Sliders List -->
+        <div id="territorySliders" class="space-y-3 pt-2"></div>
+
+        <!-- Add Country Selector -->
+        <div class="pt-3 border-t border-slate-800/80 flex items-center gap-2">
+          <select id="addCountrySelect" class="bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white flex-1"></select>
+          <button onclick="addSelectedCountry()" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-emerald-400 border border-emerald-500/30">+ Aggiungi Territorio</button>
+        </div>
+      </div>
+
+      <!-- Free vs Premium Calibration Sliders -->
+      <div class="lg:col-span-5 card-glass rounded-2xl p-5 flex flex-col justify-between space-y-4">
+        <div>
+          <div class="border-b border-slate-800 pb-3">
+            <h3 class="text-base font-bold text-white">⚖️ Calibrazione Forchetta Free vs. Premium</h3>
+            <p class="text-xs text-slate-400">Modifica le percentuali di ascolti Abbonati (Premium) vs Ad-Supported (Free)</p>
+          </div>
+
+          <div class="space-y-4 mt-4">
+            <!-- Low Scenario Slider -->
+            <div class="bg-slate-900/70 p-3.5 rounded-xl border border-slate-800">
+              <div class="flex justify-between text-xs mb-1">
+                <span class="font-semibold text-amber-400">🔴 Scenario Basso (High-Freemium):</span>
+                <span id="lowSplitText" class="font-bold text-white">60% Premium / 40% Free</span>
+              </div>
+              <input id="lowPremiumSlider" type="range" min="10" max="95" value="60" oninput="recalculateUI()" class="w-full h-1.5 bg-slate-700 rounded-lg cursor-pointer" />
+            </div>
+
+            <!-- Mid Scenario Slider -->
+            <div class="bg-emerald-950/20 p-3.5 rounded-xl border border-emerald-500/30">
+              <div class="flex justify-between text-xs mb-1">
+                <span class="font-semibold text-emerald-400">🟢 Scenario Reale Atteso (Market Split):</span>
+                <span id="midSplitText" class="font-bold text-white">81.5% Premium / 18.5% Free</span>
+              </div>
+              <input id="midPremiumSlider" type="range" min="20" max="98" value="81" oninput="recalculateUI()" class="w-full h-1.5 bg-slate-700 rounded-lg cursor-pointer" />
+            </div>
+
+            <!-- High Scenario Slider -->
+            <div class="bg-slate-900/70 p-3.5 rounded-xl border border-slate-800">
+              <div class="flex justify-between text-xs mb-1">
+                <span class="font-semibold text-sky-400">🔵 Scenario Alto (Core Fan Premium):</span>
+                <span id="highSplitText" class="font-bold text-white">90% Premium / 10% Free</span>
+              </div>
+              <input id="highPremiumSlider" type="range" min="30" max="99" value="90" oninput="recalculateUI()" class="w-full h-1.5 bg-slate-700 rounded-lg cursor-pointer" />
+            </div>
+          </div>
+        </div>
+
+        <div class="bg-slate-950/90 rounded-xl p-3.5 border border-slate-800 text-xs text-slate-400 space-y-1">
+          <div class="font-semibold text-slate-200">📌 Nota Metodologica Discografica ("At-Source"):</div>
+          <p>I valori esprimono il <strong>100% della quota Master Recording "At-Source"</strong> liquidata da Spotify al distributore nei rispettivi mercati (prima di eventuali trattenute distributore/label). I brani sotto i 1.000 ascolti annui sono esclusi dal calcolo secondo la policy Spotify vigente.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Track-by-Track Table -->
+    <section class="card-glass rounded-2xl p-5 overflow-hidden">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+        <div>
+          <h3 class="text-base font-bold text-white">🎵 Dettaglio Analitico Brano per Brano ("At-Source" USD $)</h3>
+          <p class="text-xs text-slate-400">Conteggi reali estratti da Spotify Pathfinder con forchetta Freemium/Premium per ogni traccia</p>
+        </div>
+        <button onclick="exportCSV()" class="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-bold text-emerald-400 border border-emerald-500/30 self-start sm:self-auto">
+          ⬇ Esporta Tabella CSV / Excel
+        </button>
+      </div>
+
+      <div class="overflow-x-auto">
+        <table class="w-full text-left border-collapse text-xs">
+          <thead>
+            <tr class="border-b border-slate-800 text-slate-400 uppercase text-[11px]">
+              <th class="py-3 px-2">#</th>
+              <th class="py-3 px-2">Brano</th>
+              <th class="py-3 px-2">Uscita</th>
+              <th class="py-3 px-2">Label</th>
+              <th class="py-3 px-2 text-right">Stream Dal Giorno 1</th>
+              <th class="py-3 px-2 text-right">Stream Ultimi 12M</th>
+              <th class="py-3 px-2 text-right">Stream 30 GG</th>
+              <th class="py-3 px-2 text-right text-amber-400">Min (Freemium)</th>
+              <th class="py-3 px-2 text-right text-emerald-400 font-bold">Reale Atteso (All-Time)</th>
+              <th class="py-3 px-2 text-right text-sky-400">Max (Premium)</th>
+              <th class="py-3 px-2 text-right text-slate-300">Stima Ultimi 12M</th>
+              <th class="py-3 px-2 text-right text-amber-300">Stima 30 GG</th>
+            </tr>
+          </thead>
+          <tbody id="tracksTableBody" class="divide-y divide-slate-800/60"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const BACKEND_API = "https://derived-cashiers-syndicate-feet.trycloudflare.com";
+    let currentData = null;
+    let activeTerritories = [];
+
+    // Preloaded initial snapshot for EYKEY so the page renders instantaneously on open
+    const INITIAL_SNAPSHOT = {"status":"ok","fetched_at":"2026-10-22T20:32:55.816031+00:00","entity_type":"artist","entity_id":"3aOWq3jfuEv9aBQXqW8iTe","target_title":"EYKEY","target_subtitle":"Catalogo Completo Artista","artist":{"name":"EYKEY","uri":"spotify:artist:3aOWq3jfuEv9aBQXqW8iTe","avatar_url":"https://i.scdn.co/image/ab6761610000e5ebe1ce3e0de3c00aa9bf95f23d","monthly_listeners":160757,"followers":5436,"top_cities":[{"city":"Naples","country":"IT","numberOfListeners":20216,"region":"72"},{"city":"Rome","country":"IT","numberOfListeners":19481,"region":"62"},{"city":"Bari","country":"IT","numberOfListeners":7706,"region":"75"},{"city":"Milan","country":"IT","numberOfListeners":5475,"region":"25"},{"city":"Catania","country":"IT","numberOfListeners":5186,"region":"82"}]},"territories":[{"code":"IT","name":"Italia","flag":"🇮🇹","paid_rpm":4.8,"free_rpm":0.99,"paid_share":0.809,"weight_pct":92.0,"city_listeners":58064},{"code":"CH","name":"Svizzera","flag":"🇨🇭","paid_rpm":6.97,"free_rpm":0.49,"paid_share":0.953,"weight_pct":3.0,"city_listeners":0},{"code":"DE","name":"Germania","flag":"🇩🇪","paid_rpm":4.67,"free_rpm":1.66,"paid_share":0.958,"weight_pct":2.5,"city_listeners":0},{"code":"ES","name":"Spagna","flag":"🇪🇸","paid_rpm":4.17,"free_rpm":0.49,"paid_share":0.809,"weight_pct":1.5,"city_listeners":0},{"code":"US","name":"Stati Uniti","flag":"🇺🇸","paid_rpm":4.64,"free_rpm":3.24,"paid_share":0.895,"weight_pct":1.0,"city_listeners":0}],"country_rpm_db":{"IS":{"name":"Islanda","flag":"🇮🇸","paid_rpm":7.4,"free_rpm":1.1,"paid_share":0.96},"CH":{"name":"Svizzera","flag":"🇨🇭","paid_rpm":6.97,"free_rpm":0.49,"paid_share":0.953},"FI":{"name":"Finlandia","flag":"🇫🇮","paid_rpm":6.81,"free_rpm":0.85,"paid_share":0.95},"DK":{"name":"Danimarca","flag":"🇩🇰","paid_rpm":6.75,"free_rpm":0.9,"paid_share":0.95},"GB":{"name":"Regno Unito","flag":"🇬🇧","paid_rpm":6.07,"free_rpm":1.86,"paid_share":0.93},"IE":{"name":"Irlanda","flag":"🇮🇪","paid_rpm":5.84,"free_rpm":1.4,"paid_share":0.92},"NO":{"name":"Norvegia","flag":"🇳🇴","paid_rpm":5.83,"free_rpm":0.75,"paid_share":0.96},"SE":{"name":"Svezia","flag":"🇸🇪","paid_rpm":5.68,"free_rpm":0.59,"paid_share":0.973},"LU":{"name":"Lussemburgo","flag":"🇱🇺","paid_rpm":5.59,"free_rpm":1.1,"paid_share":0.93},"NL":{"name":"Paesi Bassi","flag":"🇳🇱","paid_rpm":5.16,"free_rpm":1.07,"paid_share":0.955},"FR":{"name":"Francia","flag":"🇫🇷","paid_rpm":4.88,"free_rpm":0.86,"paid_share":0.9},"AT":{"name":"Austria","flag":"🇦🇹","paid_rpm":4.85,"free_rpm":1.2,"paid_share":0.93},"IT":{"name":"Italia","flag":"🇮🇹","paid_rpm":4.8,"free_rpm":0.99,"paid_share":0.809},"BE":{"name":"Belgio","flag":"🇧🇪","paid_rpm":4.77,"free_rpm":0.95,"paid_share":0.9},"DE":{"name":"Germania","flag":"🇩🇪","paid_rpm":4.67,"free_rpm":1.66,"paid_share":0.958},"US":{"name":"Stati Uniti","flag":"🇺🇸","paid_rpm":4.64,"free_rpm":3.24,"paid_share":0.895},"IL":{"name":"Israele","flag":"🇮🇱","paid_rpm":4.46,"free_rpm":0.9,"paid_share":0.88},"ES":{"name":"Spagna","flag":"🇪🇸","paid_rpm":4.17,"free_rpm":0.49,"paid_share":0.809},"HK":{"name":"Hong Kong","flag":"🇭🇰","paid_rpm":4.18,"free_rpm":0.95,"paid_share":0.86},"NZ":{"name":"Nuova Zelanda","flag":"🇳🇿","paid_rpm":4.12,"free_rpm":1.9,"paid_share":0.91},"JP":{"name":"Giappone","flag":"🇯🇵","paid_rpm":3.78,"free_rpm":0.95,"paid_share":0.82},"AU":{"name":"Australia","flag":"🇦🇺","paid_rpm":3.66,"free_rpm":2.4,"paid_share":0.924},"AE":{"name":"Emirati Arabi","flag":"🇦🇪","paid_rpm":3.64,"free_rpm":0.95,"paid_share":0.85},"GR":{"name":"Grecia","flag":"🇬🇷","paid_rpm":3.56,"free_rpm":0.55,"paid_share":0.8},"SG":{"name":"Singapore","flag":"🇸🇬","paid_rpm":3.54,"free_rpm":0.95,"paid_share":0.86},"PT":{"name":"Portogallo","flag":"🇵🇹","paid_rpm":3.52,"free_rpm":0.45,"paid_share":0.8},"CZ":{"name":"Rep. Ceca","flag":"🇨🇿","paid_rpm":3.29,"free_rpm":0.52,"paid_share":0.84},"CA":{"name":"Canada","flag":"🇨🇦","paid_rpm":3.18,"free_rpm":1.5,"paid_share":0.88},"HR":{"name":"Croazia","flag":"🇭🇷","paid_rpm":3.15,"free_rpm":0.48,"paid_share":0.8},"KR":{"name":"Corea del Sud","flag":"🇰🇷","paid_rpm":3.09,"free_rpm":1.04,"paid_share":0.88},"PL":{"name":"Polonia","flag":"🇵🇱","paid_rpm":2.33,"free_rpm":0.38,"paid_share":0.82},"RO":{"name":"Romania","flag":"🇷🇴","paid_rpm":2.3,"free_rpm":0.35,"paid_share":0.78},"BR":{"name":"Brasile","flag":"🇧🇷","paid_rpm":2.2,"free_rpm":0.26,"paid_share":0.914},"ZA":{"name":"Sudafrica","flag":"🇿🇦","paid_rpm":2.19,"free_rpm":0.3,"paid_share":0.78},"MX":{"name":"Messico","flag":"🇲🇽","paid_rpm":1.75,"free_rpm":0.21,"paid_share":0.901},"PE":{"name":"Perù","flag":"🇵🇪","paid_rpm":1.72,"free_rpm":0.2,"paid_share":0.83},"CL":{"name":"Cile","flag":"🇨🇱","paid_rpm":1.67,"free_rpm":0.22,"paid_share":0.86},"AR":{"name":"Argentina","flag":"🇦🇷","paid_rpm":1.21,"free_rpm":0.15,"paid_share":0.85},"CO":{"name":"Colombia","flag":"🇨🇴","paid_rpm":0.9,"free_rpm":0.12,"paid_share":0.8},"TR":{"name":"Turchia","flag":"🇹🇷","paid_rpm":0.89,"free_rpm":0.11,"paid_share":0.78},"IN":{"name":"India","flag":"🇮🇳","paid_rpm":0.78,"free_rpm":0.55,"paid_share":0.766},"ID":{"name":"Indonesia","flag":"🇮🇩","paid_rpm":0.55,"free_rpm":0.08,"paid_share":0.7},"NG":{"name":"Nigeria","flag":"🇳🇬","paid_rpm":0.39,"free_rpm":0.02,"paid_share":0.6},"GLOBAL":{"name":"Resto del Mondo (Media)","flag":"🌍","paid_rpm":3.85,"free_rpm":0.85,"paid_share":0.82}},"tracks":[{"id":"5l0KsnMQzGOJJKRRz0UY0n","uri":"spotify:track:5l0KsnMQzGOJJKRRz0UY0n","name":"LUKA MODRIC - RMX","release_name":"LUKA MODRIC (RMX)","release_date":"2025-10-13","days_active":374,"label":"47","cover_url":"https://i.scdn.co/image/ab67616d00001e0267633fc822fd99c29b3aeaa8","duration_ms":155076,"playcount_all_time":1127830,"streams_12m":958656,"streams_30d":75894,"avg_daily_streams":3015.6,"eligible_1000_threshold":true},{"id":"0FftKaSIsmyKlDneEQonCa","uri":"spotify:track:0FftKaSIsmyKlDneEQonCa","name":"BALACLAVA","release_name":"BALACLAVA","release_date":"2026-04-24","days_active":181,"label":"IS SHOW MUSIC","cover_url":"https://i.scdn.co/image/ab67616d00001e0245290337b80ede96e658302b","duration_ms":134842,"playcount_all_time":1074624,"streams_12m":1074624,"streams_30d":85074,"avg_daily_streams":5937.1,"eligible_1000_threshold":true},{"id":"14TsNrxyopRFvQI86o7ui4","uri":"spotify:track:14TsNrxyopRFvQI86o7ui4","name":"CHAPO","release_name":"CHAPO","release_date":"2026-07-03","days_active":111,"label":"IS SHOW MUSIC","cover_url":"https://i.scdn.co/image/ab67616d00001e0204bcb863cfd196407fe01d26","duration_ms":166956,"playcount_all_time":649260,"streams_12m":649260,"streams_30d":51400,"avg_daily_streams":5849.2,"eligible_1000_threshold":true},{"id":"3n73zef1cCW8qyPXr6GgTw","uri":"spotify:track:3n73zef1cCW8qyPXr6GgTw","name":"BRAVI RAGAZZI","release_name":"BRAVI RAGAZZI","release_date":"2026-03-20","days_active":216,"label":"IS SHOW MUSIC","cover_url":"https://i.scdn.co/image/ab67616d00001e0221300395441aca552c9bbbe2","duration_ms":102857,"playcount_all_time":388451,"streams_12m":388451,"streams_30d":30752,"avg_daily_streams":1798.4,"eligible_1000_threshold":true},{"id":"1eyvslAiiSFVYRGfpQtvfP","uri":"spotify:track:1eyvslAiiSFVYRGfpQtvfP","name":"FENOMENO 47","release_name":"FENOMENO 47","release_date":"2026-10-09","days_active":13,"label":"IS SHOW MUSIC","cover_url":"https://i.scdn.co/image/ab67616d00001e02b1f55c6a89ba1940b152ddfc","duration_ms":121220,"playcount_all_time":232628,"streams_12m":232628,"streams_30d":232628,"avg_daily_streams":17894.5,"eligible_1000_threshold":true},{"id":"2iDu16AN5W9AKa4QXrgtKH","uri":"spotify:track:2iDu16AN5W9AKa4QXrgtKH","name":"BALENCIAGA","release_name":"BALENCIAGA","release_date":"2026-09-04","days_active":48,"label":"IS SHOW MUSIC","cover_url":"https://i.scdn.co/image/ab67616d00001e0233832835c14b1fbac6dcf14a","duration_ms":157714,"playcount_all_time":164212,"streams_12m":164212,"streams_30d":84159,"avg_daily_streams":3421.1,"eligible_1000_threshold":true}]};
+
+    function fmtNum(n) {
+      return Math.round(n || 0).toLocaleString('it-IT');
+    }
+    function fmtUsd(n) {
+      return '$' + Math.round(n || 0).toLocaleString('en-US');
+    }
+
+    function applyData(data) {
+      currentData = data;
+      activeTerritories = JSON.parse(JSON.stringify(currentData.territories || []));
+      populateCountrySelector();
+      syncMarketDefaultSplit();
+      renderArtistHeader();
+      renderTerritorySliders();
+      recalculateUI();
+    }
+
+    async function runAnalysis() {
+      const url = document.getElementById('spotifyUrlInput').value.trim();
+      if (!url) return;
+      document.getElementById('loadingBox').classList.remove('hidden');
+      document.getElementById('errorBox').classList.add('hidden');
+      document.getElementById('analyzeBtn').disabled = true;
+
+      try {
+        const endpoint = window.location.hostname.includes('github.io')
+          ? `${BACKEND_API}/api/analyze?url=${encodeURIComponent(url)}`
+          : `/api/analyze?url=${encodeURIComponent(url)}`;
+        const resp = await fetch(endpoint);
+        if (!resp.ok) {
+          const err = await resp.json().catch(() => ({}));
+          throw new Error(err.detail || `Errore HTTP ${resp.status}`);
+        }
+        const data = await resp.json();
+        applyData(data);
+      } catch (e) {
+        const eb = document.getElementById('errorBox');
+        eb.textContent = 'Errore durante l\'analisi live: ' + e.message;
+        eb.classList.remove('hidden');
+      } finally {
+        document.getElementById('loadingBox').classList.add('hidden');
+        document.getElementById('analyzeBtn').disabled = false;
+      }
+    }
+
+    function populateCountrySelector() {
+      const sel = document.getElementById('addCountrySelect');
+      sel.innerHTML = '';
+      const db = (currentData && currentData.country_rpm_db) || {};
+      Object.keys(db).sort((a, b) => db[a].name.localeCompare(db[b].name)).forEach(code => {
+        const c = db[code];
+        const opt = document.createElement('option');
+        opt.value = code;
+        opt.textContent = `${c.flag} ${c.name} (${code}) — Paid: $${c.paid_rpm.toFixed(2)} | Free: $${c.free_rpm.toFixed(2)}`;
+        sel.appendChild(opt);
+      });
+    }
+
+    function syncMarketDefaultSplit() {
+      let totalW = 0;
+      let weightedPaidShare = 0;
+      activeTerritories.forEach(t => {
+        const w = parseFloat(t.weight_pct) || 0;
+        totalW += w;
+        weightedPaidShare += w * (t.paid_share || 0.81);
+      });
+      const avgPaidPct = totalW > 0 ? Math.round((weightedPaidShare / totalW) * 100) : 81;
+      document.getElementById('midPremiumSlider').value = avgPaidPct;
+    }
+
+    function renderArtistHeader() {
+      if (!currentData) return;
+      document.getElementById('entityBadge').textContent = (currentData.entity_type || 'ARTISTA').toUpperCase();
+      document.getElementById('subtitleText').textContent = currentData.target_subtitle || '';
+      document.getElementById('targetTitle').textContent = currentData.target_title || '';
+      document.getElementById('artistAvatar').src = (currentData.artist && currentData.artist.avatar_url) || 'https://via.placeholder.com/120';
+      document.getElementById('monthlyListeners').textContent = fmtNum(currentData.artist && currentData.artist.monthly_listeners);
+      document.getElementById('followersCount').textContent = fmtNum(currentData.artist && currentData.artist.followers);
+      document.getElementById('tracksCount').textContent = (currentData.tracks || []).length;
+
+      const citiesBox = document.getElementById('topCitiesContainer');
+      citiesBox.innerHTML = '';
+      const cities = (currentData.artist && currentData.artist.top_cities) || [];
+      if (cities.length === 0) {
+        citiesBox.innerHTML = '<span class="text-xs text-slate-500">Nessuna Top City pubblica disponibile</span>';
+      } else {
+        cities.forEach(c => {
+          const span = document.createElement('span');
+          span.className = 'text-xs px-3 py-1 rounded-full bg-slate-900 border border-slate-700 text-slate-200';
+          span.innerHTML = `📍 <strong>${c.city}</strong> (${c.country}): <span class="text-emerald-400 font-semibold">${fmtNum(c.numberOfListeners)}</span> ascoltatori`;
+          citiesBox.appendChild(span);
+        });
+      }
+    }
+
+    function renderTerritorySliders() {
+      const container = document.getElementById('territorySliders');
+      container.innerHTML = '';
+      activeTerritories.forEach((t, idx) => {
+        const row = document.createElement('div');
+        row.className = 'bg-slate-900/60 p-3 rounded-xl border border-slate-800/90';
+        row.innerHTML = `
+          <div class="flex items-center justify-between text-xs mb-1.5">
+            <span class="font-bold text-white">${t.flag} ${t.name} <span class="text-slate-500 font-normal">(${t.code})</span></span>
+            <div class="flex items-center gap-3">
+              <span class="text-[11px] text-slate-400">Paid: <b class="text-emerald-400">$${t.paid_rpm.toFixed(2)}</b> | Free: <b class="text-amber-400">$${t.free_rpm.toFixed(2)}</b></span>
+              <span id="terrWeightLabel_${idx}" class="font-extrabold text-emerald-400 w-12 text-right">${parseFloat(t.weight_pct).toFixed(1)}%</span>
+            </div>
+          </div>
+          <input type="range" min="0" max="100" step="0.5" value="${t.weight_pct}"
+            oninput="updateTerritoryWeight(${idx}, this.value)"
+            class="w-full h-1.5 bg-slate-700 rounded-lg cursor-pointer" />
+        `;
+        container.appendChild(row);
+      });
+    }
+
+    function updateTerritoryWeight(idx, val) {
+      activeTerritories[idx].weight_pct = parseFloat(val) || 0;
+      document.getElementById(`terrWeightLabel_${idx}`).textContent = activeTerritories[idx].weight_pct.toFixed(1) + '%';
+      recalculateUI();
+    }
+
+    function resetTerritories() {
+      if (!currentData) return;
+      activeTerritories = JSON.parse(JSON.stringify(currentData.territories || []));
+      syncMarketDefaultSplit();
+      renderTerritorySliders();
+      recalculateUI();
+    }
+
+    function addSelectedCountry() {
+      const code = document.getElementById('addCountrySelect').value;
+      if (!code || !currentData) return;
+      if (activeTerritories.some(t => t.code === code)) return;
+      const c = currentData.country_rpm_db[code];
+      activeTerritories.push({
+        code: code,
+        name: c.name,
+        flag: c.flag,
+        paid_rpm: c.paid_rpm,
+        free_rpm: c.free_rpm,
+        paid_share: c.paid_share,
+        weight_pct: 5.0
+      });
+      renderTerritorySliders();
+      recalculateUI();
+    }
+
+    function recalculateUI() {
+      if (!currentData) return;
+      const lowPaidPct = parseFloat(document.getElementById('lowPremiumSlider').value) || 60;
+      const midPaidPct = parseFloat(document.getElementById('midPremiumSlider').value) || 81.5;
+      const highPaidPct = parseFloat(document.getElementById('highPremiumSlider').value) || 90;
+
+      document.getElementById('lowSplitText').textContent = `${lowPaidPct}% Premium / ${100 - lowPaidPct}% Free`;
+      document.getElementById('midSplitText').textContent = `${midPaidPct}% Premium / ${100 - midPaidPct}% Free`;
+      document.getElementById('highSplitText').textContent = `${highPaidPct}% Premium / ${100 - highPaidPct}% Free`;
+      document.getElementById('activeSplitLabel').textContent = `${midPaidPct}% Paid / ${100 - midPaidPct}% Free`;
+
+      let sumW = 0;
+      let wPaidRpm = 0;
+      let wFreeRpm = 0;
+      activeTerritories.forEach(t => {
+        const w = parseFloat(t.weight_pct) || 0;
+        sumW += w;
+        wPaidRpm += w * t.paid_rpm;
+        wFreeRpm += w * t.free_rpm;
+      });
+      if (sumW <= 0) {
+        wPaidRpm = 4.80;
+        wFreeRpm = 0.99;
+      } else {
+        wPaidRpm /= sumW;
+        wFreeRpm /= sumW;
+      }
+
+      const rpmLow = (lowPaidPct / 100.0) * wPaidRpm + ((100 - lowPaidPct) / 100.0) * wFreeRpm;
+      const rpmMid = (midPaidPct / 100.0) * wPaidRpm + ((100 - midPaidPct) / 100.0) * wFreeRpm;
+      const rpmHigh = (highPaidPct / 100.0) * wPaidRpm + ((100 - highPaidPct) / 100.0) * wFreeRpm;
+
+      document.getElementById('rpmLow').textContent = '$' + rpmLow.toFixed(2);
+      document.getElementById('rpmMid').textContent = '$' + rpmMid.toFixed(2);
+      document.getElementById('rpmHigh').textContent = '$' + rpmHigh.toFixed(2);
+
+      let totAllTime = 0, tot12m = 0, tot30d = 0;
+      let eligAllTime = 0, elig12m = 0, elig30d = 0;
+
+      const tbody = document.getElementById('tracksTableBody');
+      tbody.innerHTML = '';
+
+      (currentData.tracks || []).forEach((tr, i) => {
+        const sAll = tr.playcount_all_time || 0;
+        const s12 = tr.streams_12m || 0;
+        const s30 = tr.streams_30d || 0;
+        const isElig = tr.eligible_1000_threshold !== false;
+
+        totAllTime += sAll;
+        tot12m += s12;
+        tot30d += s30;
+
+        if (isElig) {
+          eligAllTime += sAll;
+          elig12m += s12;
+          elig30d += s30;
+        }
+
+        const tLow = isElig ? (sAll / 1000.0) * rpmLow : 0;
+        const tMid = isElig ? (sAll / 1000.0) * rpmMid : 0;
+        const tHigh = isElig ? (sAll / 1000.0) * rpmHigh : 0;
+        const t12Mid = isElig ? (s12 / 1000.0) * rpmMid : 0;
+        const t30Mid = isElig ? (s30 / 1000.0) * rpmMid : 0;
+
+        const trRow = document.createElement('tr');
+        trRow.className = 'hover:bg-slate-900/60 transition';
+        trRow.innerHTML = `
+          <td class="py-3 px-2 text-slate-500">${i + 1}</td>
+          <td class="py-3 px-2 font-bold text-white">
+            <a href="https://open.spotify.com/track/${tr.id}" target="_blank" class="hover:text-emerald-400 underline decoration-slate-700">${tr.name}</a>
+            ${!isElig ? '<span class="ml-1 text-[10px] px-1.5 py-0.5 rounded bg-red-950 text-red-400">&lt;1k/yr</span>' : ''}
+          </td>
+          <td class="py-3 px-2 text-slate-400">${tr.release_date}</td>
+          <td class="py-3 px-2 text-slate-400 truncate max-w-[140px]">${tr.label}</td>
+          <td class="py-3 px-2 text-right font-semibold text-white">${fmtNum(sAll)}</td>
+          <td class="py-3 px-2 text-right text-slate-300">${fmtNum(s12)}</td>
+          <td class="py-3 px-2 text-right text-slate-300">${fmtNum(s30)}</td>
+          <td class="py-3 px-2 text-right text-amber-400 font-medium">${fmtUsd(tLow)}</td>
+          <td class="py-3 px-2 text-right text-emerald-400 font-extrabold text-sm">${fmtUsd(tMid)}</td>
+          <td class="py-3 px-2 text-right text-sky-400 font-medium">${fmtUsd(tHigh)}</td>
+          <td class="py-3 px-2 text-right text-slate-200 font-semibold">${fmtUsd(t12Mid)}</td>
+          <td class="py-3 px-2 text-right text-amber-300 font-semibold">${fmtUsd(t30Mid)}</td>
+        `;
+        tbody.appendChild(trRow);
+      });
+
+      document.getElementById('totalStreamsAllTime').textContent = fmtNum(totAllTime);
+      document.getElementById('streamsAllTimeBadge').textContent = fmtNum(totAllTime) + ' stream';
+      document.getElementById('streams12mBadge').textContent = fmtNum(tot12m) + ' stream';
+      document.getElementById('streams30dBadge').textContent = fmtNum(tot30d) + ' stream';
+
+      document.getElementById('revAllTimeLow').textContent = fmtUsd((eligAllTime / 1000.0) * rpmLow);
+      document.getElementById('revAllTimeMid').textContent = fmtUsd((eligAllTime / 1000.0) * rpmMid);
+      document.getElementById('revAllTimeHigh').textContent = fmtUsd((eligAllTime / 1000.0) * rpmHigh);
+      document.getElementById('revAllTime100Free').textContent = fmtUsd((eligAllTime / 1000.0) * wFreeRpm);
+      document.getElementById('revAllTime100Paid').textContent = fmtUsd((eligAllTime / 1000.0) * wPaidRpm);
+
+      const r12Mid = (elig12m / 1000.0) * rpmMid;
+      document.getElementById('rev12mLow').textContent = fmtUsd((elig12m / 1000.0) * rpmLow);
+      document.getElementById('rev12mMid').textContent = fmtUsd(r12Mid);
+      document.getElementById('rev12mHigh').textContent = fmtUsd((elig12m / 1000.0) * rpmHigh);
+      document.getElementById('rev12mMonthlyAvg').textContent = fmtUsd(r12Mid / 12.0) + '/mese';
+
+      const r30Mid = (elig30d / 1000.0) * rpmMid;
+      document.getElementById('rev30dLow').textContent = fmtUsd((elig30d / 1000.0) * rpmLow);
+      document.getElementById('rev30dMid').textContent = fmtUsd(r30Mid);
+      document.getElementById('rev30dHigh').textContent = fmtUsd((elig30d / 1000.0) * rpmHigh);
+      document.getElementById('rev30dAnnualized').textContent = fmtUsd(r30Mid * 12.0) + ' / anno';
+    }
+
+    function exportCSV() {
+      if (!currentData || !currentData.tracks) return;
+      const rows = [
+        ['Track', 'Release Date', 'Label', 'All-Time Streams', 'Last 12M Streams', 'Last 30D Streams', 'Track URI']
+      ];
+      currentData.tracks.forEach(t => {
+        rows.push([
+          `"${(t.name || '').replace(/"/g, '""')}"`,
+          t.release_date,
+          `"${(t.label || '').replace(/"/g, '""')}"`,
+          t.playcount_all_time,
+          t.streams_12m,
+          t.streams_30d,
+          t.uri
+        ]);
+      });
+      const csvContent = 'data:text/csv;charset=utf-8,' + rows.map(e => e.join(',')).join('\n');
+      const link = document.createElement('a');
+      link.setAttribute('href', encodeURI(csvContent));
+      link.setAttribute('download', `spotycash_${currentData.entity_id}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      if (INITIAL_SNAPSHOT && INITIAL_SNAPSHOT.status === 'ok') {
+        applyData(INITIAL_SNAPSHOT);
+      } else {
+        runAnalysis();
+      }
+    });
+  </script>
+</body>
+</html>
