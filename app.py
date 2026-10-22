@@ -126,6 +126,8 @@ def enrich_dates_labels_from_web_api(tracks_list: List[dict]):
                         t["popularity"] = int(it.get("popularity") or 0)
                         t["isrc"] = it.get("external_ids", {}).get("isrc", "")
                         alb = it.get("album", {})
+                        if alb.get("name") and t.get("release_name") in ("Single", "Unknown", ""):
+                            t["release_name"] = alb.get("name")
                         rdate = alb.get("release_date")
                         if rdate:
                             if len(rdate) == 4:
@@ -190,13 +192,13 @@ def parse_spotify_input(raw: str):
         return "artist", raw
     raise ValueError("Please enter a valid Spotify link or URI (Artist, Album, or Track).")
 
-async def ensure_pathfinder_headers(seed_type="artist", seed_id="3TVXtAsR1Inumwj472S9r4"):
+async def ensure_pathfinder_headers(seed_type="artist", seed_id="3TVXtAsR1Inumwj472S9r4", force_refresh: bool = False):
     now = time.time()
-    if PF_SESSION["headers"].get("authorization") and now < PF_SESSION["expires_at"]:
+    if not force_refresh and PF_SESSION["headers"].get("authorization") and now < PF_SESSION["expires_at"]:
         return PF_SESSION["url"], PF_SESSION["headers"], None
 
     async with BROWSER_LOCK:
-        if PF_SESSION["headers"].get("authorization") and time.time() < PF_SESSION["expires_at"]:
+        if not force_refresh and PF_SESSION["headers"].get("authorization") and time.time() < PF_SESSION["expires_at"]:
             return PF_SESSION["url"], PF_SESSION["headers"], None
 
         async with async_playwright() as p:
@@ -233,25 +235,30 @@ async def ensure_pathfinder_headers(seed_type="artist", seed_id="3TVXtAsR1Inumwj
                     "spotify-app-version": captured_headers.get("spotify-app-version", "1.2.48.299"),
                     "user-agent": captured_headers.get("user-agent", "Mozilla/5.0"),
                 }
-                PF_SESSION["expires_at"] = time.time() + 1800
+                PF_SESSION["expires_at"] = time.time() + 600
             return PF_SESSION["url"], PF_SESSION["headers"], captured_seed_data
 
-def pf_query(op_name: str, sha256_hash: str, variables: dict) -> dict:
-    url = PF_SESSION["url"]
-    headers = PF_SESSION["headers"]
-    r = requests.post(
-        url,
-        headers=headers,
-        json={
-            "variables": variables,
-            "operationName": op_name,
-            "extensions": {"persistedQuery": {"version": 1, "sha256Hash": sha256_hash}},
-        },
-        timeout=12,
-    )
-    if r.status_code != 200:
+async def pf_query(op_name: str, sha256_hash: str, variables: dict) -> dict:
+    for attempt in range(2):
+        url = PF_SESSION["url"]
+        headers = PF_SESSION["headers"]
+        r = requests.post(
+            url,
+            headers=headers,
+            json={
+                "variables": variables,
+                "operationName": op_name,
+                "extensions": {"persistedQuery": {"version": 1, "sha256Hash": sha256_hash}},
+            },
+            timeout=12,
+        )
+        if r.status_code == 200:
+            return r.json()
+        if r.status_code in (401, 403) and attempt == 0:
+            await ensure_pathfinder_headers(force_refresh=True)
+            continue
         raise RuntimeError(f"Pathfinder HTTP {r.status_code}")
-    return r.json()
+    raise RuntimeError("Pathfinder query failed after token refresh")
 
 def compute_territory_weights(top_cities: List[dict]) -> List[dict]:
     if not top_cities:
@@ -365,7 +372,7 @@ async def analyze_spotify(url: str = Query(..., description="Spotify URL or URI"
         artist_uri = f"spotify:artist:{entity_id}"
         ao = (seed_data or {}).get("queryArtistOverview")
         if not ao:
-            ao = pf_query("queryArtistOverview", HASH_ARTIST_OVERVIEW, {"uri": artist_uri, "locale": "", "preReleaseV2": False})
+            ao = await pf_query("queryArtistOverview", HASH_ARTIST_OVERVIEW, {"uri": artist_uri, "locale": "", "preReleaseV2": False})
         au = ao.get("data", {}).get("artistUnion", {})
         artist_name = au.get("profile", {}).get("name", "Unknown Artist")
         target_title = artist_name
@@ -394,7 +401,7 @@ async def analyze_spotify(url: str = Query(..., description="Spotify URL or URI"
 
         for aid in album_ids[:28]:
             try:
-                alb_res = pf_query("getAlbum", HASH_GET_ALBUM, {"uri": f"spotify:album:{aid}", "locale": "", "offset": 0, "limit": 50})
+                alb_res = await pf_query("getAlbum", HASH_GET_ALBUM, {"uri": f"spotify:album:{aid}", "locale": "", "offset": 0, "limit": 50})
                 albu = alb_res.get("data", {}).get("albumUnion", {})
                 rel_name = albu.get("name", "")
                 rel_date = albu.get("date", {}).get("isoString", "2025-01-01")
@@ -432,7 +439,7 @@ async def analyze_spotify(url: str = Query(..., description="Spotify URL or URI"
     elif entity_type == "album":
         alb_res = (seed_data or {}).get("getAlbum")
         if not alb_res:
-            alb_res = pf_query("getAlbum", HASH_GET_ALBUM, {"uri": f"spotify:album:{entity_id}", "locale": "", "offset": 0, "limit": 50})
+            alb_res = await pf_query("getAlbum", HASH_GET_ALBUM, {"uri": f"spotify:album:{entity_id}", "locale": "", "offset": 0, "limit": 50})
         albu = alb_res.get("data", {}).get("albumUnion", {})
         rel_name = albu.get("name", "Album")
         rel_date = albu.get("date", {}).get("isoString", "2025-01-01")
@@ -455,7 +462,7 @@ async def analyze_spotify(url: str = Query(..., description="Spotify URL or URI"
 
         if artist_uri:
             try:
-                ao = pf_query("queryArtistOverview", HASH_ARTIST_OVERVIEW, {"uri": artist_uri, "locale": "", "preReleaseV2": False})
+                ao = await pf_query("queryArtistOverview", HASH_ARTIST_OVERVIEW, {"uri": artist_uri, "locale": "", "preReleaseV2": False})
                 au = ao.get("data", {}).get("artistUnion", {})
                 stats = au.get("stats", {})
                 monthly_listeners = int(stats.get("monthlyListeners") or 0)
@@ -467,7 +474,7 @@ async def analyze_spotify(url: str = Query(..., description="Spotify URL or URI"
     elif entity_type == "track":
         tr_res = (seed_data or {}).get("getTrack")
         if not tr_res:
-            tr_res = pf_query("getTrack", HASH_GET_TRACK, {"uri": f"spotify:track:{entity_id}"})
+            tr_res = await pf_query("getTrack", HASH_GET_TRACK, {"uri": f"spotify:track:{entity_id}"})
         tu = tr_res.get("data", {}).get("trackUnion", {})
         alb_of_t = tu.get("albumOfTrack", {})
         rel_name = alb_of_t.get("name", "Single")
@@ -486,7 +493,7 @@ async def analyze_spotify(url: str = Query(..., description="Spotify URL or URI"
 
         if artist_uri:
             try:
-                ao = pf_query("queryArtistOverview", HASH_ARTIST_OVERVIEW, {"uri": artist_uri, "locale": "", "preReleaseV2": False})
+                ao = await pf_query("queryArtistOverview", HASH_ARTIST_OVERVIEW, {"uri": artist_uri, "locale": "", "preReleaseV2": False})
                 au = ao.get("data", {}).get("artistUnion", {})
                 stats = au.get("stats", {})
                 monthly_listeners = int(stats.get("monthlyListeners") or 0)
